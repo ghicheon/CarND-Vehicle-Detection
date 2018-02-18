@@ -20,13 +20,13 @@ from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 import math
 import os 
-#import sys
+import sys
 
 from one import car_detect_init,car_detect
 
 #avoid doing carmera callibration and getting distortion parameter values again.
-PICKLE_READY = False
-#PICKLE_READY = True
+#PICKLE_READY = False
+PICKLE_READY = True
 
 #just for debug & writeup report.
 #debug=False
@@ -224,7 +224,7 @@ def draw_lanelines(image, is_video = False):
 
     #just for writeup report
     if debug == True:
-        mpimg.imsave('writeup_combined_binary.jpg',combined)
+        cv2.imwrite('writeup_combined_binary.jpg',combined)
 
     ###############################################################
     # 10) perspective transform
@@ -251,10 +251,10 @@ def draw_lanelines(image, is_video = False):
     ##################################################################
 
     if debug == True:
-        mpimg.imsave( 'writeup_binary_warped.jpg',warped)
+        cv2.imwrite( 'writeup_binary_warped.jpg',warped)
         test_perspected = cv2.warpPerspective(image, M, (image.shape[1],image.shape[0]), flags = cv2.INTER_LINEAR)
-        mpimg.imsave( 'writeup_perspected_transform_before.jpg',image)
-        mpimg.imsave( 'writeup_perspected_transform_after.jpg',test_perspected)
+        cv2.imwrite( 'writeup_perspected_transform_before.jpg',image)
+        cv2.imwrite( 'writeup_perspected_transform_after.jpg',test_perspected)
 
     ###########################################################
     # windowing if needed
@@ -403,7 +403,6 @@ def draw_lanelines(image, is_video = False):
         newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
 
     image = car_detect(image , is_video) #XXXXXXXx !!!!!!!!!!!!!!
-    print("EEEEEEEEEE", image)
 
     ##############################################################
     #put some text on the frame/image
@@ -515,10 +514,11 @@ for f in os.listdir("test_images/"):
     image = cv2.imread('test_images/' + f )
     need_windowing=True
     out  = draw_lanelines(image)
-    mpimg.imsave( 'test_images_output/' + f ,out)
+    cv2.imwrite( 'test_images_output/' + f ,out)
 
     #skip some debug code from now on. 
     debug=False 
+    #sys.exit(1)
 print("3. single images pipeline - done")
     
 ## WRITEUP Pileline(Video) ###################################
@@ -529,9 +529,9 @@ result = clip.fl_image(lambda x:draw_lanelines(x,True))
 result.write_videofile('test_video_output.mp4', audio=False)
 print("4. video pipeline - done")
 
-#need_windowing=True
-#clip = VideoFileClip("project_video.mp4")
-#result = clip.fl_image(draw_lanelines) 
-#result.write_videofile('project_video_output.mp4', audio=False)
-#print("4. video pipeline - done")
-#
+need_windowing=True
+clip = VideoFileClip("project_video.mp4")
+result = clip.fl_image(draw_lanelines) 
+result.write_videofile('project_video_output.mp4', audio=False)
+print("4. video pipeline - done")
+
