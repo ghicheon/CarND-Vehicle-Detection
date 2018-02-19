@@ -29,8 +29,8 @@ from one import car_detect_init,car_detect
 PICKLE_READY = True
 
 #just for debug & writeup report.
-#debug=False
-debug=True
+debug=False
+#debug=True
 
 
 #It took some time to do Sliding window search.It will be better to avoid it as much as possible.
@@ -421,13 +421,6 @@ def draw_lanelines(image, is_video = False):
 
     #XXX newwarp = newwarp.astype(np.float32)
 
-    print(image.dtype)
-    print(image.shape)
-    print(newwarp.dtype)
-    print(newwarp.shape)
-    print("SSSS1", image[0][0])
-    print("SSSS2", newwarp[0][0])
-
     #if it's not valid, just  use preview newwarp!!
     # Combine the result with the original image
     return cv2.addWeighted(image, 1, newwarp, 0.3, 0) #alpha=1 ,beta=0.3 ,gamma=0
@@ -529,9 +522,9 @@ result = clip.fl_image(lambda x:draw_lanelines(x,True))
 result.write_videofile('test_video_output.mp4', audio=False)
 print("4. video pipeline - done")
 
-need_windowing=True
-clip = VideoFileClip("project_video.mp4")
-result = clip.fl_image(draw_lanelines) 
-result.write_videofile('project_video_output.mp4', audio=False)
-print("4. video pipeline - done")
-
+#need_windowing=True
+#clip = VideoFileClip("project_video.mp4")
+#result = clip.fl_image(draw_lanelines) 
+#result.write_videofile('project_video_output.mp4', audio=False)
+#print("4. video pipeline - done")
+#
