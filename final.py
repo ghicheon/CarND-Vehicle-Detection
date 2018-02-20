@@ -25,8 +25,8 @@ import sys
 from one import car_detect_init,car_detect
 
 #avoid doing carmera callibration and getting distortion parameter values again.
-#PICKLE_READY = False
-PICKLE_READY = True
+PICKLE_READY = False
+#PICKLE_READY = True
 
 #just for debug & writeup report.
 debug=False
@@ -522,9 +522,9 @@ result = clip.fl_image(lambda x:draw_lanelines(x,True))
 result.write_videofile('test_video_output.mp4', audio=False)
 print("4. video pipeline - done")
 
-#need_windowing=True
-#clip = VideoFileClip("project_video.mp4")
-#result = clip.fl_image(draw_lanelines) 
-#result.write_videofile('project_video_output.mp4', audio=False)
-#print("4. video pipeline - done")
-#
+need_windowing=True
+clip = VideoFileClip("project_video.mp4")
+result = clip.fl_image(draw_lanelines) 
+result.write_videofile('project_video_output.mp4', audio=False)
+print("4. video pipeline - done")
+
