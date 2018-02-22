@@ -30,9 +30,12 @@ X_scaler = None
 #PICKLE_USE = True
 PICKLE_USE = False
 
+SMALL_DATASET = False
+
 #################################################################################
 
 def convert_color(img):
+    #print("CONVERT",img[0,1] ,img[10,10])
     global color_space
     if color_space != 'RGB':
         if color_space == 'HSV':
@@ -83,6 +86,7 @@ def color_hist(img, nbins=32):    #bins_range=(0, 256)
     # Concatenate the histograms into a single feature vector
     hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
     # Return the individual histograms, bin_centers and feature vector
+
     return hist_features
 
 def extract_features(imgs, spatial_size=(32, 32),
@@ -193,6 +197,10 @@ def car_detect_init():
         cars = glob.glob('vehicles/*/*.png')
         notcars = glob.glob('non-vehicles/*/*.png')
 
+        if SMALL_DATASET == True:
+            cars = cars[0:10]
+            notcars = notcars[0:10]
+
         #cars = glob.glob('v/*.png')
         #notcars = glob.glob('n/*.png')
 
@@ -295,10 +303,10 @@ def draw_labeled_bboxes(img, labels):
 def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
     
     draw_img = np.copy(img)
-    #print(draw_img)
-    #print(draw_img.shape)
 
-    img = img.astype(np.float32)/255
+    #img = img.astype(np.float32)/255
+    #img = img.astype(np.float32)
+    print(img[0,0,0])
     #print(img)
     #print(img.shape)
     

@@ -522,9 +522,9 @@ result = clip.fl_image(lambda x:draw_lanelines(x,True))
 result.write_videofile('test_video_output.mp4', audio=False)
 print("4. video pipeline - done")
 
-#need_windowing=True
-#clip = VideoFileClip("project_video.mp4")
-#result = clip.fl_image(draw_lanelines) 
-#result.write_videofile('project_video_output.mp4', audio=False)
-#print("4. video pipeline - done")
-#
+need_windowing=True
+clip = VideoFileClip("project_video.mp4")
+result = clip.fl_image(draw_lanelines) 
+result.write_videofile('project_video_output.mp4', audio=False)
+print("4. video pipeline - done")
+
