@@ -25,7 +25,8 @@ hist_size = 32    # Number of histogram bins
 spatial_feat = True # Spatial features on or off
 hist_feat = True # Histogram features on or off
 hog_feat = True # HOG features on or off
-y_start_stop = [400,656]
+#y_start_stop = [400,656]
+y_start_stop = [380,700]
 svc = None
 X_scaler = None
 
@@ -33,6 +34,7 @@ X_scaler = None
 PICKLE_USE = False
 
 SMALL_DATASET = False
+#SMALL_DATASET = True
 
 #################################################################################
 
@@ -200,8 +202,8 @@ def car_detect_init():
         notcars = glob.glob('non-vehicles/*/*.png')
 
         if SMALL_DATASET == True:
-            cars = cars[0:10]
-            notcars = notcars[0:10]
+            cars = cars[0:1000]
+            notcars = notcars[0:1000]
 
         #cars = glob.glob('v/*.png')
         #notcars = glob.glob('n/*.png')
@@ -304,9 +306,7 @@ def find_cars(img, scale):
 
     #img = img.astype(np.float32)/255
     #img = img.astype(np.float32)
-    print(img[0,0,0])
-    #print(img)
-    #print(img.shape)
+    #print(img[0,0,0])
     
     img_tosearch = img[ystart:ystop,:,:]
     ctrans_tosearch = convert_color(img_tosearch)
@@ -335,6 +335,7 @@ def find_cars(img, scale):
     hog2 = get_hog_features(ch2,feature_vec=False)
     hog3 = get_hog_features(ch3,feature_vec=False)
     
+    box_list=[]
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb*cells_per_step
@@ -371,8 +372,16 @@ def find_cars(img, scale):
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
-                cv2.rectangle(draw_img,(xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart),(0,0,255),6) 
-                
+                box_list.append(  ((xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart))  )
+
+    #!!!!!!!!!!!!XXXXXXXXXXXXXX
+    heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)
+    heat = add_heat(heat,box_list)
+    heat = apply_threshold(heat,1)
+    heatmap =np.clip(heat,0,255)
+    labels = label(heatmap)
+    draw_img = draw_labeled_bboxes(draw_img,labels)
+
     return draw_img
 
 def car_detect(img, is_video = True):
