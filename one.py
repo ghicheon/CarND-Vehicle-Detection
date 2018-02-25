@@ -25,18 +25,35 @@ hist_size = 32    # Number of histogram bins
 spatial_feat = True # Spatial features on or off
 hist_feat = True # Histogram features on or off
 hog_feat = True # HOG features on or off
-#y_start_stop = [400,656]
-y_start_stop = [380,700]
+y_start_stop = [400,656]
 svc = None
 X_scaler = None
 
-#PICKLE_USE = True
-PICKLE_USE = False
+
+#how many continuous frames do we maintain for calculating "car detection"?
+HEAT_LST_LIMIT = 10
+
+#if cars are detected on valid_frames continuous  frames, the detections is considered valid.
+#valid_frames=9   
+#valid_frames=12  
+valid_frames=7
+
+#used in car_detect().
+scale = 1.5
+
+
+PICKLE_USE = True
+#PICKLE_USE = False
 
 SMALL_DATASET = False
 #SMALL_DATASET = True
 
-#################################################################################
+is_video = False    #!!!
+
+############################################
+# reference:  image size (720,1280)
+############################################
+
 
 def convert_color(img):
     global color_space
@@ -161,12 +178,6 @@ def single_img_features(img):
         #8) Append features to list
         img_features.append(hog_features)
 
-    #print("TRAIN1...", type(np.array(hog_features)) , type(spatial_features) , type(hist_features))
-    #print("TRAIN2...", (np.array(hog_features)).shape , (spatial_features).shape , (hist_features).shape)
-    #print("TRAIN3...", hog_features[0] , hog_features[1] , hog_features[2] )
-    #print("TRAIN4..." , spatial_features[0] , hist_features[0])
-
-
     #9) Return concatenated array of features
     return np.concatenate(img_features)
 
@@ -256,12 +267,18 @@ def car_detect_init():
         svc = pickle.load( open( "svc.p", "rb" ))
         X_scaler = pickle.load( open( "X_scaler.p", "rb" ))
 
+#initializing before processing new video.
+def car_detect_init_for_video():
+    global heat_list
+    heat_list = []
+    is_video = True    #!!!
+
 
 def add_heat(heatmap, bbox_list):
     # Iterate through list of bboxes
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
-        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
+        # Assuming each "box" takesthe form ((x1, y1), (x2, y2))
         heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
     # Return updated heatmap
@@ -292,12 +309,15 @@ def draw_labeled_bboxes(img, labels):
 ################################################################################################
 
 
+# maintain some continuous frames. 
+heat_list = []
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, scale):
+def car_detect(img):
     global y_start_stop
     global orient,pix_per_cell, cell_per_block, hog_channel
     global svc,X_scaler
+    global scale
 
     ystart = y_start_stop[0]
     ystop = y_start_stop[1]
@@ -311,7 +331,8 @@ def find_cars(img, scale):
     img_tosearch = img[ystart:ystop,:,:]
     ctrans_tosearch = convert_color(img_tosearch)
     if scale != 1:
-        imshape = ctrans_tosearch.shape
+        imshape = ctrans_tosearch.shape 
+        print("imshape", imshape)   #(256,1280,3)
         ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
         
     ch1 = ctrans_tosearch[:,:,0]
@@ -322,13 +343,18 @@ def find_cars(img, scale):
     nxblocks = (ch1.shape[1] // pix_per_cell) - cell_per_block + 1
     nyblocks = (ch1.shape[0] // pix_per_cell) - cell_per_block + 1 
     nfeat_per_block = orient*cell_per_block**2
+    print("ch1.shape", ch1.shape) #(170,853)
+    print("A", nxblocks,nyblocks,nfeat_per_block) #105 20 36
     
     # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
     window = 64
     nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
+
+    #XXXXXXXXXXXXXXXXXXXXXXXXXXXX
     cells_per_step = 2  # Instead of overlap, define how many cells to step
     nxsteps = (nxblocks - nblocks_per_window) // cells_per_step + 1
     nysteps = (nyblocks - nblocks_per_window) // cells_per_step + 1
+    print("A", nblocks_per_window,nxsteps,nysteps)  #7 50 7
     
     # Compute individual channel HOG features for the entire image
     hog1 = get_hog_features(ch1,feature_vec=False)
@@ -356,12 +382,6 @@ def find_cars(img, scale):
             spatial_features = bin_spatial(subimg)
             hist_features = color_hist(subimg)
 
-            #print("PREDICT1...", type(hog_features) , type(spatial_features) , type(hist_features))
-            #print("PREDICT2...", hog_features.shape , (spatial_features).shape , (hist_features).shape)
-            #print("PREDICT3...", hog_features[0] , hog_features[1] , hog_features[2] )
-            #print("PREDICT4..." , spatial_features[0] , hist_features[0])
-
-
             # Scale features and make a prediction
             oo = np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1)    
             test_features = X_scaler.transform(oo)
@@ -374,34 +394,44 @@ def find_cars(img, scale):
                 win_draw = np.int(window*scale)
                 box_list.append(  ((xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart))  )
 
-    #!!!!!!!!!!!!XXXXXXXXXXXXXX
+
+    #1st filter
     heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)
     heat = add_heat(heat,box_list)
-    heat = apply_threshold(heat,1)
+    heat = apply_threshold(heat,2)
     heatmap =np.clip(heat,0,255)
-    labels = label(heatmap)
-    draw_img = draw_labeled_bboxes(draw_img,labels)
+    out1 = label(heatmap)
+
+    global is_video
+
+    if is_video == False:
+        draw_img = draw_labeled_bboxes(draw_img,out1)
+        return draw_img
+    else:
+        global heat_list
+        global HEAT_LST_LIMIT 
+        global valid_frames
+        if len(heat_list) >= HEAT_LST_LIMIT:
+           heat_list.pop(0)  #remove front one.
+
+        heat_list.append(out1[0])
+
+        #2st filter
+        if len(heat_list) == HEAT_LST_LIMIT:
+            heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)    #init!
+            
+            for bs in heat_list:
+                heat = add_heat(heat,bs)
+
+            heat = apply_threshold(heat, valid_frames)
+
+            heatmap =np.clip(heat,0,255)
+            labels = label(heatmap)
+            draw_img = draw_labeled_bboxes(draw_img,labels)
+        else:
+            pass  # return original image
 
     return draw_img
 
-def car_detect(img, is_video = True):
-    global color_space
-    global orient 
-    global pix_per_cell 
-    global cell_per_block 
-    global hog_channel 
-    global spatial_size 
-    global hist_size 
-    global spatial_feat 
-    global hist_feat 
-    global hog_feat 
-    global y_start_stop 
-    global svc 
-    global X_scaler
-
-    scale = 1.5
         
-    out_img = find_cars(img, scale)
-
-    return out_img
 

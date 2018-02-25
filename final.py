@@ -22,11 +22,11 @@ import math
 import os 
 import sys
 
-from one import car_detect_init,car_detect
+from one import car_detect_init,car_detect, car_detect_init_for_video
 
 #avoid doing carmera callibration and getting distortion parameter values again.
-PICKLE_READY = False
-#PICKLE_READY = True
+#PICKLE_READY = False
+PICKLE_READY = True
 
 #just for debug & writeup report.
 debug=False
@@ -126,7 +126,7 @@ def check_curvature(a,b,c,X):
            return (False, radius_of_curvature)
 
 
-def draw_lanelines(image, is_video = False):
+def draw_lanelines(image):
     global need_windowing
     global newwarp 
 
@@ -402,7 +402,7 @@ def draw_lanelines(image, is_video = False):
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
         newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
 
-    image = car_detect(image , is_video) #XXXXXXXx !!!!!!!!!!!!!!
+    image = car_detect(image) 
 
     ##############################################################
     #put some text on the frame/image
@@ -518,12 +518,14 @@ print("3. single images pipeline - done")
 
 need_windowing=True
 clip = VideoFileClip("test_video.mp4")
-result = clip.fl_image(lambda x:draw_lanelines(x,True)) 
+car_detect_init_for_video()
+result = clip.fl_image(draw_lanelines) 
 result.write_videofile('test_video_output.mp4', audio=False)
 print("4. video pipeline - done")
 
 need_windowing=True
 clip = VideoFileClip("project_video.mp4")
+car_detect_init_for_video()
 result = clip.fl_image(draw_lanelines) 
 result.write_videofile('project_video_output.mp4', audio=False)
 print("4. video pipeline - done")
