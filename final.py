@@ -1,13 +1,13 @@
 #######################################################################
 # Udacity Self Driving Car Nanodegree 
 #
-# Project 5: Vehicle Detection
+# Project 5: Vehicle Detection and Tracking
 # by Ghicheon Lee 
 #
 # date: 2018.2.26
 #######################################################################
 
-#I referenced a lot of codes and hints from "Vehicle Detection" Lecture of CarND!
+#I referenced a lot of codes and hints from "Vehicle Detection" Lecture!
 
 import numpy as np
 import cv2
@@ -29,8 +29,8 @@ import os
 
 # save time for training of SVC model, camera calibration, and scaler.
 # pickle/dist_pickle.p  , pickle/svc.p ,  pickle/X_scaler.p
-PICKLE_READY = False
-#PICKLE_READY = True
+#PICKLE_READY = False
+PICKLE_READY = True
 
 #just for debug & writeup report.
 debug=False
@@ -77,6 +77,54 @@ is_video = False    #!!!
 # maintain some continuous frames. 
 heat_list = []
 
+
+
+#list of founded cars.
+#valid cars in gCars only have chances to be shown!!
+cars=list()
+
+#############################################
+# class Car represents a found "car".
+#############################################
+class Car(object):
+    # a: upper left point
+    # b: bottom right point
+    def __init__(self, a,b,ref=0):
+        self.a = a
+        self.b = b
+
+        self.x1 = a[0]
+        self.y1 = a[1]
+        self.x2 = b[0]
+        self.y2 = b[1]
+
+        self.x = a[0]  #of upper left point
+        self.y = a[1]  #of upper left point
+        self.xcenter = (b[0] + a[0]) //2
+        self.ycenter = (b[1] + a[1]) //2
+        self.width = b[0] - a[0]
+        self.height = b[1] - a[1]
+        self.ref = ref
+    def update(self,a,b):
+        __init__(a,b)
+
+    #get the distance between this object and argument object 
+    #unit:pixel
+    def distance(self,a,b):
+        xcenter = (b[0] + a[0]) //2
+        ycenter = (b[1] + a[1]) //2
+        val = np.sqrt(  (xcenter - self.xcenter)**2 + (ycenter - self.ycenter)**2)
+        print("distance:", val)
+        return val
+
+    def inc_ref(self):
+        self.ref += 1
+    def dec_ref(self):
+        self.ref -= 1
+
+    # the number of valid object must be having 5 refrences  at least.
+    def valid(self):
+        return self.ref >= 5   
 
 ############################################
 # reference:  image size (720,1280)
@@ -416,10 +464,76 @@ def car_detect(img):
     heat = add_heat(heat,box_list)
     heat = apply_threshold(heat,2)
     heatmap =np.clip(heat,0,255)
-    out1 = label(heatmap)
+    labels = label(heatmap)
 
     if is_video == False:
-        draw_img = draw_labeled_bboxes(draw_img,out1)
+        #draw_img = draw_labeled_bboxes(draw_img,labels)
+
+        x1=0
+        x2=0
+        y1=0
+        y2=0
+        # Iterate through all detected cars
+        for car_number in range(1, labels[1]+1):
+            # Find pixels with each car_number label value
+            nonzero = (labels[0] == car_number).nonzero()
+            # Identify x and y values of those pixels
+            nonzeroy = np.array(nonzero[0])
+            nonzerox = np.array(nonzero[1])
+            # Define a bounding box based on min/max x and y
+            bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+            done=False
+
+            #smoothing!!
+            x1 = bbox[0][0]
+            y1 = bbox[0][1]
+            x2 = bbox[1][0]
+            y2 = bbox[1][1]
+
+            #too narrow object must not be a car!!!
+            #the ratio must be reaonable...!!!
+            for c in cars:
+                if ((x2 - x1) < 30):
+                    cars.remove(c)
+                elif (x2 - x1) != 0: 
+                    if((y2 - y1)/(x2 - x1)) > 1.2: 
+                       cars.remove(c)
+
+            for c in cars:
+                if c.distance(bbox[0],bbox[1]) < 100 :
+
+
+                    a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 )
+                    b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
+                    cars.append(Car(a,b, c.ref+3))
+                    cars.remove(c)
+                    done=True
+            #new one
+            if done == False:
+                cars.append(Car(bbox[0],bbox[1], 3))
+
+        for c in cars:
+            c.dec_ref()
+            if c.ref == 0:
+                cars.remove(c)
+
+        #too narrow object must not be a car!!!
+        #the ratio must be reaonable...!!!
+        for c in cars:
+            if ((x2 - x1) < 30):
+                cars.remove(c)
+            elif (x2 - x1) != 0: 
+                if((y2 - y1)/(x2 - x1)) > 1.2: 
+                   cars.remove(c)
+
+
+        print(len(cars))
+
+        #draw
+        for c in cars:
+            if c.valid() == True:
+                cv2.rectangle(draw_img, c.a,c.b, (0,0,255), 6)
+
         return draw_img
     else:
         #if it's a video frame, we have to consider continuous frames!!!
@@ -431,7 +545,7 @@ def car_detect(img):
         if len(heat_list) >= HEAT_LST_LIMIT:
            heat_list.pop(0)  #remove front one!
 
-        heat_list.append(out1[0])
+        heat_list.append(labels[0])
 
         #2st filter
         if len(heat_list) == HEAT_LST_LIMIT:
