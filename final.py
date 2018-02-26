@@ -4,34 +4,463 @@
 # Project 5: Vehicle Detection
 # by Ghicheon Lee 
 #
-# date: 2018.2.17
+# date: 2018.2.26
 #######################################################################
 
 #I referenced a lot of codes and hints from "Vehicle Detection" Lecture of CarND!
 
-
 import numpy as np
 import cv2
 import glob
-import matplotlib.pyplot as plt
+import time
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from skimage.feature import hog
+import pickle
+from scipy.ndimage.measurements import label
 import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+
 import pickle
 from moviepy.editor import VideoFileClip
-from IPython.display import HTML
-import math
 import os 
-import sys
+#import sys
 
-from one import car_detect_init,car_detect, car_detect_init_for_video
-
-#avoid doing carmera callibration and getting distortion parameter values again.
-#PICKLE_READY = False
-PICKLE_READY = True
+# save time for training of SVC model, camera calibration, and scaler.
+# pickle/dist_pickle.p  , pickle/svc.p ,  pickle/X_scaler.p
+PICKLE_READY = False
+#PICKLE_READY = True
 
 #just for debug & writeup report.
 debug=False
 #debug=True
 
+##################################################################
+color_space = 'YCrCb'# Can be RGB, HSV, LUV, HLS!, YUV, YCrCb
+orient = 9  # HOG orientations
+pix_per_cell = 8 # HOG pixels per cell
+cell_per_block = 2 # HOG cells per block
+hog_channel = "ALL" #0 # Can be 0, 1, 2, or "ALL"
+
+spatial_size = (32, 32) # Spatial binning dimensions
+hist_size = 32    # Number of histogram bins
+
+spatial_feat = True # Spatial features on or off
+hist_feat = True # Histogram features on or off
+hog_feat = True # HOG features on or off
+y_start_stop = [400,656]
+##################################################################
+
+
+# for pickle
+svc = None            #SVC model
+X_scaler = None       #Nomalization of features
+dist=None
+mtx=None
+
+
+#how many continuous frames do we maintain for calculating "car detection"?
+HEAT_LST_LIMIT = 10
+valid_frames=7
+
+#used in car_detect().
+scale = 1.5
+
+SMALL_DATASET = False
+#SMALL_DATASET = True
+
+is_video = False    #!!!
+
+
+
+# maintain some continuous frames. 
+heat_list = []
+
+
+############################################
+# reference:  image size (720,1280)
+############################################
+
+
+def convert_color(img):
+    global color_space
+    if color_space != 'RGB':
+        if color_space == 'HSV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        elif color_space == 'LUV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
+        elif color_space == 'HLS':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+        elif color_space == 'YUV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        elif color_space == 'YCrCb':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    else: 
+        feature_image = np.copy(img)      
+
+    return feature_image 
+
+def get_hog_features(img ,vis=False ,feature_vec=True):
+    global orient, pix_per_cell, cell_per_block
+
+    # Call with two outputs if vis==True
+    if vis == True:
+        features, hog_image = hog(img, orientations=orient,
+                                  pixels_per_cell=(pix_per_cell, pix_per_cell),
+                                  cells_per_block=(cell_per_block, cell_per_block),
+                                  transform_sqrt=True,
+                                  visualise=vis, feature_vector=feature_vec)
+        return features, hog_image
+    # Otherwise call with one output
+    else:
+        features = hog(img, orientations=orient,
+                       pixels_per_cell=(pix_per_cell, pix_per_cell),
+                       cells_per_block=(cell_per_block, cell_per_block),
+                       transform_sqrt=True,
+                       visualise=vis, feature_vector=feature_vec)
+        return features
+
+def bin_spatial(img):
+    global spatial_size
+    color1 = cv2.resize(img[:,:,0], spatial_size).ravel()
+    color2 = cv2.resize(img[:,:,1], spatial_size).ravel()
+    color3 = cv2.resize(img[:,:,2], spatial_size).ravel()
+    return np.hstack((color1, color2, color3))
+
+def color_hist(img):
+    global hist_size
+    # Compute the histogram of the color channels separately
+    channel1_hist = np.histogram(img[:,:,0], hist_size)
+    channel2_hist = np.histogram(img[:,:,1], hist_size)
+    channel3_hist = np.histogram(img[:,:,2], hist_size)
+    # Concatenate the histograms into a single feature vector
+    hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+    # Return the individual histograms, bin_centers and feature vector
+
+    return hist_features
+
+def extract_features(imgs): 
+    global color_space
+    global spatial_size, hist_size
+    global orient,pix_per_cell, cell_per_block, hog_channel
+    global spatial_feat, hist_feat, hog_feat
+
+    # Create a list to append feature vectors to
+    features = []
+    # Iterate through the list of images
+    for file in imgs:
+        image = cv2.imread(file)
+
+        img_features= single_img_features(image)
+
+        features.append(img_features)
+
+    # Return list of feature vectors
+    return features
+    
+
+# Define a function to draw bounding boxes
+def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
+    # Make a copy of the image
+    imcopy = np.copy(img)
+    # Iterate through the bounding boxes
+    for bbox in bboxes:
+        # Draw a rectangle given bbox coordinates
+        cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+    # Return the image copy with boxes drawn
+    return imcopy
+
+# Define a function to extract features from a single image window
+def single_img_features(img):
+    global color_space
+    global spatial_size, hist_size
+    global orient,pix_per_cell, cell_per_block, hog_channel
+    global spatial_feat, hist_feat, hog_feat
+
+    #1) Define an empty list to receive features
+    img_features = []
+    #2) Apply color conversion if other than 'RGB'
+    feature_image = convert_color(img)
+    #3) Compute spatial features if flag is set
+
+    if spatial_feat == True:
+        spatial_features = bin_spatial(feature_image)
+        #4) Append features to list
+        img_features.append(spatial_features)
+    #5) Compute histogram features if flag is set
+    if hist_feat == True:
+        hist_features = color_hist(feature_image)
+        #6) Append features to list
+        img_features.append(hist_features)
+    #7) Compute HOG features if flag is set
+    if hog_feat == True:
+        if hog_channel == 'ALL':
+            hog_features = []
+            for channel in range(feature_image.shape[2]):
+                hog_features.extend(get_hog_features(feature_image[:,:,channel], 
+                                    vis=False, feature_vec=True))      
+        else:
+            hog_features = get_hog_features(feature_image[:,:,hog_channel],
+                                            vis=False, feature_vec=True)
+        #8) Append features to list
+        img_features.append(hog_features)
+
+    #9) Return concatenated array of features
+    return np.concatenate(img_features)
+
+    
+
+###########################################################################
+# Main
+###########################################################################
+
+
+def car_detect_init():
+    global PICKLE_READY
+    global svc, X_scaler
+
+    if PICKLE_READY == False:  
+        global color_space
+        global orient 
+        global pix_per_cell 
+        global cell_per_block 
+        global hog_channel 
+        global spatial_size 
+        global hist_size 
+        global spatial_feat 
+        global hist_feat 
+        global hog_feat 
+
+        print("car_detect_init......")
+
+        # Read in cars and notcars
+        cars = glob.glob('data/vehicles/*/*.png')
+        notcars = glob.glob('data/non-vehicles/*/*.png')
+
+        #just for debug
+        if SMALL_DATASET == True:
+            cars = cars[0:1000]
+            notcars = notcars[0:1000]
+
+        print("length of cars: ",len(cars))
+        print("length of notcars: ",len(notcars))
+        
+        car_features = extract_features(cars)
+        notcar_features = extract_features(notcars)
+        
+        # Create an array stack of feature vectors
+        X = np.vstack((car_features, notcar_features)).astype(np.float64)
+        
+        # Define the labels vector
+        y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+        
+        # Split up data into randomized training and test sets
+        rand_state = np.random.randint(0, 100)
+        X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.2, random_state=rand_state)
+            
+        # Fit a per-column scaler
+        X_scaler = StandardScaler().fit(X_train)
+        # Apply the scaler to X
+        X_train = X_scaler.transform(X_train)
+        X_test = X_scaler.transform(X_test)
+        
+        print('Using:',orient,'orientations',pix_per_cell,
+            'pixels per cell and', cell_per_block,'cells per block')
+        print('Feature vector length:', len(X_train[0]))
+
+        # Use a linear SVC 
+        svc = LinearSVC()
+        
+        # Check the training time for the SVC
+        t=time.time()
+        svc.fit(X_train, y_train)
+        t2 = time.time()
+        print(round(t2-t, 2), 'Seconds to train SVC...')
+        # Check the score of the SVC
+        print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+
+        pickle.dump( svc, open( "pickle/svc.p", "wb" ))
+        pickle.dump( X_scaler, open( "pickle/X_scaler.p", "wb" ))
+    else:
+        svc = pickle.load( open( "pickle/svc.p", "rb" ))
+        X_scaler = pickle.load( open( "pickle/X_scaler.p", "rb" ))
+
+#initializing before processing "new" video.
+def car_detect_init_for_video():
+    global heat_list
+    global is_video
+    heat_list = []
+    #is_video = True   
+
+
+def add_heat(heatmap, bbox_list):
+    # Iterate through list of bboxes
+    for box in bbox_list:
+        # Add += 1 for all pixels inside each bbox
+        # Assuming each "box" takesthe form ((x1, y1), (x2, y2))
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+
+    # Return updated heatmap
+    return heatmap
+    
+def apply_threshold(heatmap, threshold):
+    # Zero out pixels below the threshold
+    heatmap[heatmap <= threshold] = 0
+    # Return thresholded map
+    return heatmap
+
+def draw_labeled_bboxes(img, labels):
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        # Draw the box on the image
+        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
+    # Return the image
+    return img
+
+# Define a single function that can extract features using hog sub-sampling and make predictions
+def car_detect(img):
+    global y_start_stop
+    global orient,pix_per_cell, cell_per_block, hog_channel
+    global svc,X_scaler
+    global scale
+    global is_video
+
+    ystart = y_start_stop[0]
+    ystop = y_start_stop[1]
+    
+    draw_img = np.copy(img)
+
+    #!!! this is not necessary because we're using cv2 functions consistantly !!!
+    #img = img.astype(np.float32)/255
+    
+    img_tosearch = img[ystart:ystop,:,:]
+    ctrans_tosearch = convert_color(img_tosearch)
+    if scale != 1:
+        imshape = ctrans_tosearch.shape 
+        #print("imshape", imshape)   #(256,1280,3)
+        ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
+        
+    ch1 = ctrans_tosearch[:,:,0]
+    ch2 = ctrans_tosearch[:,:,1]
+    ch3 = ctrans_tosearch[:,:,2]
+
+    # Define blocks and steps as above
+    nxblocks = (ch1.shape[1] // pix_per_cell) - cell_per_block + 1
+    nyblocks = (ch1.shape[0] // pix_per_cell) - cell_per_block + 1 
+    nfeat_per_block = orient*cell_per_block**2
+    #print("ch1.shape", ch1.shape) #(170,853)
+    #print("TEST1" , nxblocks,nyblocks,nfeat_per_block) #105 20 36
+    
+    # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
+    window = 64
+    nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
+
+    #1 for cells_per_step gave me a lot of improvement!!!
+    cells_per_step = 1  # Instead of overlap, define how many cells to step
+    nxsteps = (nxblocks - nblocks_per_window) // cells_per_step + 1
+    nysteps = (nyblocks - nblocks_per_window) // cells_per_step + 1
+    #print("TEST2", nblocks_per_window,nxsteps,nysteps)  #7 50 7
+    
+    # Compute individual channel HOG features for the entire image
+    hog1 = get_hog_features(ch1,feature_vec=False)
+    hog2 = get_hog_features(ch2,feature_vec=False)
+    hog3 = get_hog_features(ch3,feature_vec=False)
+    
+    #It maintains the boundary boxes that a car is detected. 
+    box_list=[]
+
+    for xb in range(nxsteps):
+        for yb in range(nysteps):
+            ypos = yb*cells_per_step
+            xpos = xb*cells_per_step
+            # Extract HOG for this patch
+            hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+            hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+            hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+
+            xleft = xpos*pix_per_cell
+            ytop = ypos*pix_per_cell
+
+            # Extract the image patch
+            subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
+          
+            # Get color features
+            spatial_features = bin_spatial(subimg)
+            hist_features = color_hist(subimg)
+
+            # Scale features and make a prediction
+            oo = np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1)    
+            test_features = X_scaler.transform(oo)
+            #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))    
+            test_prediction = svc.predict(test_features)
+            
+
+            if test_prediction == 1:
+                xbox_left = np.int(xleft*scale)
+                ytop_draw = np.int(ytop*scale)
+                win_draw = np.int(window*scale)
+                #add the boundary box to box_list
+                box_list.append(  ((xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart))  )
+
+    #1st filter
+    heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)
+    heat = add_heat(heat,box_list)
+    heat = apply_threshold(heat,2)
+    heatmap =np.clip(heat,0,255)
+    out1 = label(heatmap)
+
+    if is_video == False:
+        draw_img = draw_labeled_bboxes(draw_img,out1)
+        return draw_img
+    else:
+        #if it's a video frame, we have to consider continuous frames!!!
+        global heat_list
+        global HEAT_LST_LIMIT 
+        global valid_frames
+
+        #trying to remain HEAT_LST_LIMIT number of heat_list.
+        if len(heat_list) >= HEAT_LST_LIMIT:
+           heat_list.pop(0)  #remove front one!
+
+        heat_list.append(out1[0])
+
+        #2st filter
+        if len(heat_list) == HEAT_LST_LIMIT:
+            heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)    #init!
+            
+            for bs in heat_list:
+                heat = add_heat(heat,bs)
+
+            heat = apply_threshold(heat, valid_frames)
+
+            heatmap =np.clip(heat,0,255)
+            labels = label(heatmap)
+            draw_img = draw_labeled_bboxes(draw_img,labels)
+        else:
+            pass  # return original image
+
+    return draw_img
+
+        
+
+
+
+
+############################################################################################
+# Project 4: Advanced Line Finding
+#
+# Following code came from my 4th project! 
+# Most of the code is the same as before. Main difference is calling car_detect_init().
+###########################################################################################
 
 #It took some time to do Sliding window search.It will be better to avoid it as much as possible.
 #we can't skip it from the beginning. For new video, it is done about the first frame.
@@ -58,8 +487,6 @@ newwarp = None
 #it was assumed that the lane is 3.7 meters wide
 M_PER_PIXEL = 3.7/700
 
-##########################################
-car_detect_init()
 
 
 def region_of_interest(img, vertices):
@@ -224,7 +651,7 @@ def draw_lanelines(image):
 
     #just for writeup report
     if debug == True:
-        cv2.imwrite('writeup_combined_binary.jpg',combined)
+        cv2.imwrite('writeup_images/ombined_binary.jpg',combined)
 
     ###############################################################
     # 10) perspective transform
@@ -251,10 +678,10 @@ def draw_lanelines(image):
     ##################################################################
 
     if debug == True:
-        cv2.imwrite( 'writeup_binary_warped.jpg',warped)
+        cv2.imwrite( 'writeup_images/binary_warped.jpg',warped)
         test_perspected = cv2.warpPerspective(image, M, (image.shape[1],image.shape[0]), flags = cv2.INTER_LINEAR)
-        cv2.imwrite( 'writeup_perspected_transform_before.jpg',image)
-        cv2.imwrite( 'writeup_perspected_transform_after.jpg',test_perspected)
+        cv2.imwrite( 'writeup_images/perspected_transform_before.jpg',image)
+        cv2.imwrite( 'writeup_images/perspected_transform_after.jpg',test_perspected)
 
     ###########################################################
     # windowing if needed
@@ -395,10 +822,6 @@ def draw_lanelines(image):
         # Draw the lane onto the warped blank image
         cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 
-        #cv2.circle(color_warp,(600,400), 30, (255,0,0), -1) #just for debug
-
-
-        
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
         newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
 
@@ -425,108 +848,102 @@ def draw_lanelines(image):
     # Combine the result with the original image
     return cv2.addWeighted(image, 1, newwarp, 0.3, 0) #alpha=1 ,beta=0.3 ,gamma=0
 
-###########################################################################
-#main code
-###########################################################################
 
 
+def main():
+    global mtx,dist
 
-# WRITEUP camera calibration  #########################################
-if PICKLE_READY == False:
-    # make object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-    objp = np.zeros((6*9,3), np.float32)
-    objp[:,:2] = np.mgrid[0:9, 0:6].T.reshape(-1,2)
+    car_detect_init()  #project 5!
 
-    # Arrays to store object points and image points from all the images.
-    objpoints = [] # 3d points in real world space
-    imgpoints = [] # 2d points in image plane.
-    
-    # Make a list of calibration images
-    images = glob.glob('camera_cal/calibration*.jpg')
-    
-    # Step through the list and search for chessboard corners
-    for idx, fname in enumerate(images):
-        img = cv2.imread(fname)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-        # Find the chessboard corners
-        ret, corners = cv2.findChessboardCorners(gray, (9,6), None)
-        # If found, add object points, image points
-        if ret == True:
-            objpoints.append(objp)
-            imgpoints.append(corners)
-    
-            #Draw and display the corners
-            #cv2.drawChessboardCorners(img, (9,6), corners, ret)
-            #write_name = 'corners_found'+str(idx)+'.jpg'
-            #cv2.imwrite(write_name, img)
-            #cv2.imshow('img', img)
-            #cv2.waitKey(500)
-    
-    #cv2.destroyAllWindows()
-    print("1. camera calibration - done")
-    
+    # WRITEUP camera calibration  #########################################
+    if PICKLE_READY == False:
+        # make object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+        objp = np.zeros((6*9,3), np.float32)
+        objp[:,:2] = np.mgrid[0:9, 0:6].T.reshape(-1,2)
 
-# undistortion test ########################################
-    img = cv2.imread('camera_cal/calibration1.jpg')
-    img_size = (img.shape[1], img.shape[0])
-    
-    # Do camera calibration. mtx and dist will be used for next step.
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size,None,None)
-    
-    dst = cv2.undistort(img, mtx, dist, None, mtx)
-    cv2.imwrite('writeup_calibration1_undist_before.jpg',img)
-    cv2.imwrite('writeup_calibration1_undist_after.jpg',dst)
+        # Arrays to store object points and image points from all the images.
+        objpoints = [] # 3d points in real world space
+        imgpoints = [] # 2d points in image plane.
+        
+        # Make a list of calibration images
+        images = glob.glob('camera_cal/calibration*.jpg')
+        
+        # Step through the list and search for chessboard corners
+        for idx, fname in enumerate(images):
+            img = cv2.imread(fname)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+            # Find the chessboard corners
+            ret, corners = cv2.findChessboardCorners(gray, (9,6), None)
+            # If found, add object points, image points
+            if ret == True:
+                objpoints.append(objp)
+                imgpoints.append(corners)
+        
+        print("1. camera calibration - done")
+        # undistortion test ########################################
+        img = cv2.imread('camera_cal/calibration1.jpg')
+        img_size = (img.shape[1], img.shape[0])
+        
+        # Do camera calibration. mtx and dist will be used for next step.
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size,None,None)
+        
+        dst = cv2.undistort(img, mtx, dist, None, mtx)
+        cv2.imwrite('writeup_images/calibration1_undist_before.jpg',img)
+        cv2.imwrite('writeup_images/calibration1_undist_after.jpg',dst)
 
 
-# undistortion test  with test image #########################
-    img = cv2.imread('test_images/test1.jpg')
-    img_size = (img.shape[1], img.shape[0])
-    
-    dst = cv2.undistort(img, mtx, dist, None, mtx)
-    cv2.imwrite('writeup_undistorted_test_image.jpg',dst)
-    
-    #save the result as a pickle in order to save time.
-    dist_pickle = {}
-    dist_pickle["mtx"] = mtx
-    dist_pickle["dist"] = dist
-    pickle.dump( dist_pickle, open( "dist_pickle.p", "wb" ) )
-else:
-    #reload the pickle image
-    dist_pickle = {}
-    dist_pickle =  pickle.load(open( "dist_pickle.p", "rb" ) )
-    mtx = dist_pickle["mtx"]  
-    dist = dist_pickle["dist"] 
+        # undistortion test  with test image #########################
+        img = cv2.imread('test_images/test1.jpg')
+        img_size = (img.shape[1], img.shape[0])
+        
+        dst = cv2.undistort(img, mtx, dist, None, mtx)
+        cv2.imwrite('writeup_images/ndistorted_test_image.jpg',dst)
+        
+        #save the result as a pickle in order to save time.
+        dist_pickle = {}
+        dist_pickle["mtx"] = mtx
+        dist_pickle["dist"] = dist
+        pickle.dump( dist_pickle, open( "pickle/dist_pickle.p", "wb" ) )
+    else:
+        #reload the pickle image
+        dist_pickle = {}
+        dist_pickle =  pickle.load(open( "pickle/dist_pickle.p", "rb" ) )
+        mtx = dist_pickle["mtx"]  
+        dist = dist_pickle["dist"] 
 
-print("2. undistortion test - done")
+    print("2. undistortion test - done")
 
-## WRITEUP Pipeline(Single Images)  ##########################
-for f in os.listdir("test_images/"):
-    global need_windows
+    ## WRITEUP Pipeline(Single Images)  ##########################
+    for f in os.listdir("test_images/"):
+        global need_windows
 
-    image = cv2.imread('test_images/' + f )
+        image = cv2.imread('test_images/' + f )
+        need_windowing=True
+        out  = draw_lanelines(image)
+        cv2.imwrite( 'output_images/' + f ,out)
+
+        #skip some debug code from now on. 
+        debug=False 
+        #sys.exit(1)
+    print("3. single images pipeline - done")
+        
+    ## WRITEUP Pileline(Video) ###################################
+
     need_windowing=True
-    out  = draw_lanelines(image)
-    cv2.imwrite( 'test_images_output/' + f ,out)
+    clip = VideoFileClip("test_video.mp4")
+    car_detect_init_for_video()
+    result = clip.fl_image(draw_lanelines) 
+    result.write_videofile('test_video_output.mp4', audio=False)
+    print("4. video pipeline - done")
 
-    #skip some debug code from now on. 
-    debug=False 
-    #sys.exit(1)
-print("3. single images pipeline - done")
-    
-## WRITEUP Pileline(Video) ###################################
+    need_windowing=True
+    clip = VideoFileClip("project_video.mp4")
+    car_detect_init_for_video()
+    result = clip.fl_image(draw_lanelines) 
+    result.write_videofile('project_video_output.mp4', audio=False)
+    print("4. video pipeline - done")
 
-need_windowing=True
-clip = VideoFileClip("test_video.mp4")
-car_detect_init_for_video()
-result = clip.fl_image(draw_lanelines) 
-result.write_videofile('test_video_output.mp4', audio=False)
-print("4. video pipeline - done")
 
-need_windowing=True
-clip = VideoFileClip("project_video.mp4")
-car_detect_init_for_video()
-result = clip.fl_image(draw_lanelines) 
-result.write_videofile('project_video_output.mp4', audio=False)
-print("4. video pipeline - done")
-
+if __name__ == "__main__":
+    main()
