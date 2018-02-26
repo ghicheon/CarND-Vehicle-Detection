@@ -59,11 +59,6 @@ X_scaler = None       #Nomalization of features
 dist=None
 mtx=None
 
-
-#how many continuous frames do we maintain for calculating "car detection"?
-HEAT_LST_LIMIT = 10
-valid_frames=7
-
 #used in car_detect().
 scale = 1.5
 
@@ -72,10 +67,6 @@ SMALL_DATASET = False
 
 is_video = False    #!!!
 
-
-
-# maintain some continuous frames. 
-heat_list = []
 
 
 
@@ -90,14 +81,22 @@ class Car(object):
     # a: upper left point
     # b: bottom right point
     def __init__(self, a,b,ref=0):
+        self.init_core(a,b,ref)
+        self.turn_on = False # only one
+
+    def update(self,a,b):
+        self.init_core(a, b, self.ref + 2)
+        if (self.turn_on == False) and (self.ref > 10):
+            self.ref  += 10  #permanant!!!!!!?? 
+            self.turn_on = True
+
+    def init_core(self,a,b,ref):
         self.a = a
         self.b = b
-
         self.x1 = a[0]
         self.y1 = a[1]
         self.x2 = b[0]
         self.y2 = b[1]
-
         self.x = a[0]  #of upper left point
         self.y = a[1]  #of upper left point
         self.xcenter = (b[0] + a[0]) //2
@@ -105,8 +104,8 @@ class Car(object):
         self.width = b[0] - a[0]
         self.height = b[1] - a[1]
         self.ref = ref
-    def update(self,a,b):
-        __init__(a,b)
+            
+
 
     #get the distance between this object and argument object 
     #unit:pixel
@@ -119,12 +118,13 @@ class Car(object):
 
     def inc_ref(self):
         self.ref += 1
+
     def dec_ref(self):
         self.ref -= 1
 
     # the number of valid object must be having 5 refrences  at least.
     def valid(self):
-        return self.ref >= 5   
+        return (self.ref >= 5   ) 
 
 ############################################
 # reference:  image size (720,1280)
@@ -336,10 +336,12 @@ def car_detect_init():
 
 #initializing before processing "new" video.
 def car_detect_init_for_video():
-    global heat_list
     global is_video
-    heat_list = []
-    #is_video = True   
+    global cars
+
+    #because of new video! new start!
+    cars=list()
+    is_video = True   
 
 
 def add_heat(heatmap, bbox_list):
@@ -372,6 +374,20 @@ def draw_labeled_bboxes(img, labels):
         cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
     # Return the image
     return img
+
+#too narrow object must not be a car!!!
+#the ratio must be reaonable...!!!
+def remove_unrealistic_cars():
+    for c in cars:
+        if c.ref == 0 :
+            if ((x2 - x1) < 30):
+                cars.remove(c)
+            elif (x2 - x1) != 0: 
+                if((y2 - y1)/(x2 - x1)) > 1.5 :  #too narrow!
+                   cars.remove(c)
+            elif (y2 - y1) != 0: 
+                if((x2 - x1)/(y2 - y1)) > 5 :  #too fat!
+                   cars.remove(c)
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
 def car_detect(img):
@@ -467,8 +483,9 @@ def car_detect(img):
     labels = label(heatmap)
 
     if is_video == False:
-        #draw_img = draw_labeled_bboxes(draw_img,labels)
-
+        draw_img = draw_labeled_bboxes(draw_img,labels)
+    else:
+        #video!!!!!!!!!!!!!
         x1=0
         x2=0
         y1=0
@@ -490,77 +507,37 @@ def car_detect(img):
             x2 = bbox[1][0]
             y2 = bbox[1][1]
 
-            #too narrow object must not be a car!!!
-            #the ratio must be reaonable...!!!
-            for c in cars:
-                if ((x2 - x1) < 30):
-                    cars.remove(c)
-                elif (x2 - x1) != 0: 
-                    if((y2 - y1)/(x2 - x1)) > 1.2: 
-                       cars.remove(c)
+            remove_unrealistic_cars()
 
             for c in cars:
-                if c.distance(bbox[0],bbox[1]) < 100 :
-
-
+                if c.distance(bbox[0],bbox[1]) < 50 :
                     a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 )
                     b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
-                    cars.append(Car(a,b, c.ref+3))
-                    cars.remove(c)
+                    #cars.append(Car(a,b, c.ref+2))
+                    #cars.remove(c)
+                    c.update(a,b)
                     done=True
+                    break
+
             #new one
             if done == False:
-                cars.append(Car(bbox[0],bbox[1], 3))
+                cars.append(Car(bbox[0],bbox[1], 2))
 
         for c in cars:
             c.dec_ref()
             if c.ref == 0:
                 cars.remove(c)
 
-        #too narrow object must not be a car!!!
-        #the ratio must be reaonable...!!!
-        for c in cars:
-            if ((x2 - x1) < 30):
-                cars.remove(c)
-            elif (x2 - x1) != 0: 
-                if((y2 - y1)/(x2 - x1)) > 1.2: 
-                   cars.remove(c)
-
+        remove_unrealistic_cars()
 
         print(len(cars))
 
         #draw
         for c in cars:
+            print("cars:", c.ref , end='')
             if c.valid() == True:
                 cv2.rectangle(draw_img, c.a,c.b, (0,0,255), 6)
-
-        return draw_img
-    else:
-        #if it's a video frame, we have to consider continuous frames!!!
-        global heat_list
-        global HEAT_LST_LIMIT 
-        global valid_frames
-
-        #trying to remain HEAT_LST_LIMIT number of heat_list.
-        if len(heat_list) >= HEAT_LST_LIMIT:
-           heat_list.pop(0)  #remove front one!
-
-        heat_list.append(labels[0])
-
-        #2st filter
-        if len(heat_list) == HEAT_LST_LIMIT:
-            heat = np.zeros_like(draw_img[:,:,0]).astype(np.float)    #init!
-            
-            for bs in heat_list:
-                heat = add_heat(heat,bs)
-
-            heat = apply_threshold(heat, valid_frames)
-
-            heatmap =np.clip(heat,0,255)
-            labels = label(heatmap)
-            draw_img = draw_labeled_bboxes(draw_img,labels)
-        else:
-            pass  # return original image
+        print('')
 
     return draw_img
 
