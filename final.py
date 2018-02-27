@@ -509,15 +509,21 @@ def car_detect(img):
 
             remove_unrealistic_cars()
 
+            found_box_tuple=(None,None)
             for c in cars:
-                if c.distance(bbox[0],bbox[1]) < 50 :
-                    a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 )
-                    b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
-                    #cars.append(Car(a,b, c.ref+2))
-                    #cars.remove(c)
-                    c.update(a,b)
-                    done=True
-                    break
+                if found_box_tuple == (None,None): #not found!
+                    if c.distance(bbox[0],bbox[1]) < 50 :
+                        a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 )
+                        b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
+                        #cars.append(Car(a,b, c.ref+2))
+                        #cars.remove(c)
+                        c.update(a,b)
+                        done=True
+                        found_box_tuple = (a,b) 
+                else: #found!!!
+                    #delete duplicated objects!!  whithin 30 pixel!
+                    if c.distance(found_box_tuple[0],found_box_tuple[1]) < 30 :
+                        cars.remove(c)
 
             #new one
             if done == False:
