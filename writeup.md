@@ -1,5 +1,3 @@
----
-
 **Vehicle Detection Project**
 
 The goals / steps of this project are the following:
@@ -60,22 +58,20 @@ I used vehicles.zip and non-vehicles.zip files for training SVM. The number of v
 First, I extracted features from these image files. The function extract_features() did all for it. I used hog features as well as color histogram features and spatial features.   
 Second, I divided extracted features data into 2 parts. 80% of data is for traing. 20% of data is for testing.    
 Third,I nomalized the data using StandardScaler() in order to make all features influence to the result evenly.   
-I took advantage of pickle of python to save time.If I set PICKEL_READY to True,training is skipped. 
-
-
-This code can be found in car_detect_init() function of the file called final.py
+I took advantage of pickle of python to save time.If I set PICKEL_READY to True,training is skipped.    
+The code can be found in car_detect_init() function of the file called final.py
 
 ### Sliding Window Search
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
-
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
-
-![alt text][image3]
+I got around 0.875 overlap windows by setting cells_per_step to 1. It gave me huge better result in video.But it took almost twice time when processing video file.      
+I spent some time to finding good value for scale. I found out default value 1.5 was not bad in my experience.  There might be better value. But,I didn't think it's worth finding it. I think it's better to put effort into making good tracking algorithm. Because of this, I decided to use 1.5 for scale.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+Original sliding window took lots of time for training.I didn't get hog features for every window.Instead, I got hog feature 1 time per frame and used small part(window size) of it. In fact, My code is based on find_car() of the lecture. I made it work in open cv by deleting dividing by 255(Wow... I spent too much time for it).    
+Upper part of car_detect() is for it.
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+  Here are some example images:
 
 ![alt text][image4]
 ---
@@ -88,9 +84,15 @@ Here's a [link to my video result](./project_video.mp4)
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+Whenever my classifier says positive detection, I added the rectangle to box_list list. I used heatmap,threshhold,and label to find car position.
+I spent so much time on getting a good result only with these tools.But It was not possible!! Finally, I realized that I have to make a code for tracking cars by using specific data structure!!   
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+I created Car class. It represents one car. 'ref' member is for maintaining the reference count.If a car is detected several times, it's worth showing it.    
+'ref' is also used to show persistant box. When ref is more than 10,this one must be a car definitely.I added 10 more reference in that case. It made it possible to show a car even if it's not detected for a while.
+
+Before I draw a rectangle,I check ref memger of Car object. If it's less than 5, I ignore it at the moment becuase it might be a false positive.
+I ignored the detected object when the width is less than 30 pixel. it's too narrow to be a car.    
+I also considered the ratio of width and height. For example, if the width is 100 and the height is 160, it's not a car. 
 
 ### Here are six frames and their corresponding heatmaps:
 
@@ -109,6 +111,13 @@ Here's an example result showing the heatmap from a series of frames of video, t
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+
+I only considered previous and current frame. If many frames for a car are used and getting average of them, the rectangle will be robust.   
+
+ I'm thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line. It can reduce false positive.
+
+
+
 
 Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
 
