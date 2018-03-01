@@ -513,7 +513,7 @@ def car_detection(img):
             found_box_tuple=(None,None)
             for c in cars:
                 if found_box_tuple == (None,None): #not found yet!
-                    if c.distance(bbox[0],bbox[1]) < 50 : # the car whthin 50 pixel was assumed the same car.
+                    if c.distance(bbox[0],bbox[1]) < 100 : # the car whthin 50 pixel was assumed the same car.
                         a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 ) #average of  previous car and current one.
                         b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
                         #cars.append(Car(a,b, c.ref+2))
@@ -523,7 +523,7 @@ def car_detection(img):
                         found_box_tuple = (a,b) 
                 else: #found!!! 
                     #delete duplicated objects!!  whithin 30 pixel!
-                    if c.distance(found_box_tuple[0],found_box_tuple[1]) < 30 :
+                    if c.distance(found_box_tuple[0],found_box_tuple[1]) < 100 :
                         cars.remove(c)
 
             #new one
