@@ -29,15 +29,15 @@ import os
 
 # save time for training of SVC model, camera calibration, and scaler.
 # pickle/dist_pickle.p  , pickle/svc.p ,  pickle/X_scaler.p
-#PICKLE_READY = False
-PICKLE_READY = True
+PICKLE_READY = False
+#PICKLE_READY = True
 
 #just for debug & writeup report.
 debug=False
 #debug=True
 
 ##################################################################
-color_space = 'YCrCb'# Can be RGB, HSV, LUV, HLS!, YUV, YCrCb
+color_space =  'YCrCb'# Can be RGB, HSV, LUV., HLS!, YUV, YCrCb
 orient = 9  # HOG orientations
 pix_per_cell = 8 # HOG pixels per cell
 cell_per_block = 2 # HOG cells per block
@@ -46,9 +46,10 @@ hog_channel = "ALL" #0 # Can be 0, 1, 2, or "ALL"
 spatial_size = (32, 32) # Spatial binning dimensions
 hist_size = 32    # Number of histogram bins
 
-spatial_feat = True # Spatial features on or off
-hist_feat = True # Histogram features on or off
-hog_feat = True # HOG features on or off
+spatial_feat = True  # Spatial features on or off
+hist_feat = False # Histogram features on or off
+
+hog_feat = True # HOG features on or off # it's a essential feature.turn on allways..
 y_start_stop = [400,656]
 ##################################################################
 
@@ -59,7 +60,7 @@ X_scaler = None       #Nomalization of features
 dist=None
 mtx=None
 
-#used in car_detect().
+#used in car_detection().
 scale = 1.5
 
 SMALL_DATASET = False
@@ -113,7 +114,6 @@ class Car(object):
         xcenter = (b[0] + a[0]) //2
         ycenter = (b[1] + a[1]) //2
         val = np.sqrt(  (xcenter - self.xcenter)**2 + (ycenter - self.ycenter)**2)
-        print("distance:", val)
         return val
 
     def inc_ref(self):
@@ -221,7 +221,6 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
 
 # Define a function to extract features from a single image window
 def single_img_features(img):
-    global color_space
     global spatial_size, hist_size
     global orient,pix_per_cell, cell_per_block, hog_channel
     global spatial_feat, hist_feat, hog_feat
@@ -264,7 +263,7 @@ def single_img_features(img):
 ###########################################################################
 
 
-def car_detect_init():
+def car_detection_init():
     global PICKLE_READY
     global svc, X_scaler
 
@@ -280,7 +279,7 @@ def car_detect_init():
         global hist_feat 
         global hog_feat 
 
-        print("car_detect_init......")
+        print("car_detection_init......")
 
         # Read in cars and notcars
         cars = glob.glob('data/vehicles/*/*.png')
@@ -288,8 +287,8 @@ def car_detect_init():
 
         #just for debug
         if SMALL_DATASET == True:
-            cars = cars[0:1000]
-            notcars = notcars[0:1000]
+            cars = cars[0:100]
+            notcars = notcars[0:100]
 
         print("length of cars: ",len(cars))
         print("length of notcars: ",len(notcars))
@@ -335,7 +334,7 @@ def car_detect_init():
         X_scaler = pickle.load( open( "pickle/X_scaler.p", "rb" ))
 
 #initializing before processing "new" video.
-def car_detect_init_for_video():
+def car_detection_init_for_video():
     global is_video
     global cars
 
@@ -390,7 +389,7 @@ def remove_unrealistic_cars():
                    cars.remove(c)
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def car_detect(img):
+def car_detection(img):
     global y_start_stop
     global orient,pix_per_cell, cell_per_block, hog_channel
     global svc,X_scaler
@@ -457,16 +456,18 @@ def car_detect(img):
             # Extract the image patch
             subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
           
-            # Get color features
-            spatial_features = bin_spatial(subimg)
-            hist_features = color_hist(subimg)
+            features=[]
+            if spatial_feat == True:
+                features.append(bin_spatial(subimg))
 
-            # Scale features and make a prediction
-            oo = np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1)    
-            test_features = X_scaler.transform(oo)
-            #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))    
+            if hist_feat == True:
+                features.append(color_hist(subimg))
+
+            features.append(hog_features)
+
+            test_features = X_scaler.transform(np.hstack((features)).reshape(1, -1))
+            #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
             test_prediction = svc.predict(test_features)
-            
 
             if test_prediction == 1:
                 xbox_left = np.int(xleft*scale)
@@ -536,14 +537,12 @@ def car_detect(img):
 
         remove_unrealistic_cars()
 
-        print(len(cars))
-
-        #draw
+        #draw valid cars!!
         for c in cars:
-            print("cars:", c.ref , end='')
+            #print("cars:", c.ref , end='')
             if c.valid() == True:
                 cv2.rectangle(draw_img, c.a,c.b, (0,0,255), 6)
-        print('')
+        #print('')
 
     return draw_img
 
@@ -556,7 +555,7 @@ def car_detect(img):
 # Project 4: Advanced Line Finding
 #
 # Following code came from my 4th project! 
-# Most of the code is the same as before. Main difference is calling car_detect_init().
+# Most of the code is the same as before. Main difference is calling car_detection_init().
 ###########################################################################################
 
 #It took some time to do Sliding window search.It will be better to avoid it as much as possible.
@@ -638,7 +637,6 @@ def check_curvature(a,b,c,X):
         yp = a*2 *X + b
         ypp = a*2
         radius_of_curvature = ((1 + yp**2)**3/2)/abs(ypp)
-        #print(radius_of_curvature)
 
         #check if the radius is from 2000 to 30000.
         #if the value is out of this range, it's not valid. 
@@ -650,7 +648,7 @@ def check_curvature(a,b,c,X):
            return (False, radius_of_curvature)
 
 
-def draw_lanelines(image):
+def process_frame(image):
     global need_windowing
     global newwarp 
 
@@ -922,7 +920,7 @@ def draw_lanelines(image):
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
         newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
 
-    image = car_detect(image) 
+    image = car_detection(image) 
 
     ##############################################################
     #put some text on the frame/image
@@ -950,7 +948,7 @@ def draw_lanelines(image):
 def main():
     global mtx,dist
 
-    car_detect_init()  #project 5!
+    car_detection_init()  #project 5!
 
     # WRITEUP camera calibration  #########################################
     if PICKLE_READY == False:
@@ -1017,7 +1015,7 @@ def main():
 
         image = cv2.imread('test_images/' + f )
         need_windowing=True
-        out  = draw_lanelines(image)
+        out  = process_frame(image)
         cv2.imwrite( 'output_images/' + f ,out)
 
         #skip some debug code from now on. 
@@ -1029,15 +1027,15 @@ def main():
 
     need_windowing=True
     clip = VideoFileClip("test_video.mp4")
-    car_detect_init_for_video()
-    result = clip.fl_image(draw_lanelines) 
+    car_detection_init_for_video()
+    result = clip.fl_image(process_frame) 
     result.write_videofile('test_video_output.mp4', audio=False)
     print("4. video pipeline - done")
 
     need_windowing=True
     clip = VideoFileClip("project_video.mp4")
-    car_detect_init_for_video()
-    result = clip.fl_image(draw_lanelines) 
+    car_detection_init_for_video()
+    result = clip.fl_image(process_frame) 
     result.write_videofile('project_video_output.mp4', audio=False)
     print("4. video pipeline - done")
 
