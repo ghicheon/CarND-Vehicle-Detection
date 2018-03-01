@@ -46,8 +46,8 @@ hog_channel = "ALL" #0 # Can be 0, 1, 2, or "ALL"
 spatial_size = (32, 32) # Spatial binning dimensions
 hist_size = 32    # Number of histogram bins
 
-spatial_feat = True  # Spatial features on or off
-hist_feat = False # Histogram features on or off
+spatial_feat = False  # Spatial features on or off
+hist_feat = False  # Histogram features on or off
 
 hog_feat = True # HOG features on or off # it's a essential feature.turn on allways..
 y_start_stop = [400,656]
@@ -512,16 +512,16 @@ def car_detection(img):
 
             found_box_tuple=(None,None)
             for c in cars:
-                if found_box_tuple == (None,None): #not found!
-                    if c.distance(bbox[0],bbox[1]) < 50 :
-                        a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 )
+                if found_box_tuple == (None,None): #not found yet!
+                    if c.distance(bbox[0],bbox[1]) < 50 : # the car whthin 50 pixel was assumed the same car.
+                        a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 ) #average of  previous car and current one.
                         b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
                         #cars.append(Car(a,b, c.ref+2))
                         #cars.remove(c)
-                        c.update(a,b)
-                        done=True
+                        c.update(a,b)  
+                        done=True  # found the car we're trying to tracking.
                         found_box_tuple = (a,b) 
-                else: #found!!!
+                else: #found!!! 
                     #delete duplicated objects!!  whithin 30 pixel!
                     if c.distance(found_box_tuple[0],found_box_tuple[1]) < 30 :
                         cars.remove(c)
@@ -530,6 +530,8 @@ def car_detection(img):
             if done == False:
                 cars.append(Car(bbox[0],bbox[1], 2))
 
+        # all entries of cars decreased 1.
+        #it's resonable because 2 reference counts was added in update() of Class.
         for c in cars:
             c.dec_ref()
             if c.ref == 0:
@@ -537,7 +539,9 @@ def car_detection(img):
 
         remove_unrealistic_cars()
 
-        #draw valid cars!!
+        ########################################
+        #draw only valid cars!!
+        ########################################
         for c in cars:
             #print("cars:", c.ref , end='')
             if c.valid() == True:
@@ -1039,6 +1043,11 @@ def main():
     result.write_videofile('project_video_output.mp4', audio=False)
     print("4. video pipeline - done")
 
-
+    need_windowing=True
+    clip = VideoFileClip("project_video.mp4")
+    car_detection_init_for_video()
+    result = clip.fl_image(process_frame) 
+    result.write_videofile('project_video_output_1.mp4', audio=False)
+    print("4. video pipeline - done")
 if __name__ == "__main__":
     main()
