@@ -86,7 +86,14 @@ class Car(object):
         self.turn_on = False # only one
 
     def update(self,a,b):
-        self.init_core(a, b, self.ref + 2)
+        #self.ref can't exceed 80.
+        if self.ref < 80 :
+            self.init_core(a, b, self.ref + 2)
+        else:
+            #in car_detection(), all entries will be decreasing 1,
+            #therefore, +1 means +0 in reality.
+            self.init_core(a, b, self.ref +1 ) 
+
         #I thought that...
         #consistant showing objects has more probabilities to be shown in the following frames
         #therefore,some more incentives might be helpful..
@@ -126,9 +133,9 @@ class Car(object):
     def dec_ref(self):
         self.ref -= 1
 
-    # the number of valid object must be having 10 refrences  at least.
+    # the number of valid object must be having 5 refrences  at least.
     def valid(self):
-        return (self.ref >= 10   ) 
+        return (self.ref >= 5   ) 
 
 ############################################
 # reference:  image size (720,1280)
@@ -532,7 +539,7 @@ def car_detection(img):
 
             #new one
             if done == False:
-                cars.append(Car(bbox[0],bbox[1], 2))
+                cars.append(Car((bbox[0][0]-10,bbox[0][1]),(bbox[1][0]+10,bbox[1][1]), 2))#more wide
 
         # all entries of the list "cars" will be decreasing 1.
         #it's resonable because 2 reference counts was added in update() of Car class.
