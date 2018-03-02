@@ -10,15 +10,23 @@ The goals / steps of this project are the following:
 * Estimate a bounding box for vehicles detected.
 
 [//]: # (Image References)
-[image1]:   ./writeup_images/image59_notcar.png
-[image1_1]: ./writeup_images/image0110_car.png
-[image2]: ./examples/HOG_example.jpg
-[image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
+[image1]:  ./writeup_images/car_example.png
+[image1_1]: ./writeup_images/notcar_example.png
+
+[image2]:     ./writeup_images/car_hog.png
+[image2_1]:  ./writeup_images/car_log_1.png
+[image3]: ./writeup_images/notcar_hog.png
+[image3_1]: ./writeup_images/notcar_hog_1.png
+[image4]: ./writeup_images/test1.jpg
+[image5_1]: ./writeup_images/video1.png
+[image5_2]: ./writeup_images/video2.png
+[image5_3]: ./writeup_images/video3.png
+[image5_4]: ./writeup_images/video4.png
+[image5_5]: ./writeup_images/video5.png
+[image5_6]: ./writeup_images/video5_valid_real.png
+[image5_7]: ./writeup_images/video6.png
+[image5_8]: ./writeup_images/video9_valid.png
+
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
 ### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
@@ -40,13 +48,18 @@ I used 9 for orient ,8 for pixel per cell ,2 cell per block and "ALL" hog channe
 
 
 non-car example    
-![alt text][image1]
+![alt text][image1]       
+car example       
+![alt text][image1_1]        
 
-car example
-![alt text][image1_1]
-
-
-![alt text][image2]
+hog feature example 1  for car  
+![alt text][image2]          
+hog feature example 2  for car  
+![alt text][image2_1]        
+hog feature example 2  for not-car  
+![alt text][image3]
+hog feature example 2  for not-car   
+![alt text][image3_1]
 
 #### 2. Explain how you settled on your final choice of HOG parameters.
 I tried some combinations of hog parameters. Definitely,using 3 channels gave me much improvement. I got better result under the sun by setting transform_sqrt argument to True.     
@@ -94,19 +107,17 @@ Before I draw a rectangle,I check ref memger of Car object. If it's less than 5,
 I ignored the detected object when the width is less than 30 pixel. it's too narrow to be a car.    
 I also considered the ratio of width and height. For example, if the width is 100 and the height is 160, it's not a car. 
 
+
 ### Here are six frames and their corresponding heatmaps:
+![alt text][image5_1]         
+![alt text][image5_2]       
+![alt text][image5_3]      
+![alt text][image5_4]      
+![alt text][image5_5]       
 
-![alt text][image5]
+Even though the beginning output of labels is not perfect, it doesn't matter. after several frames, because I'm using reference counter. when the reference counter is exceeding some water mark(5 frames now), it will show reasonable detectection.          
+![alt text][image5_7]        
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
-
----
 
 ### Discussion
 
