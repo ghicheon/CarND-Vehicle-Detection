@@ -92,7 +92,7 @@ Upper part of car_detection() is for it.
 ### Video Implementation
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./project_video_output.mp4)
 
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
@@ -120,6 +120,7 @@ I got this from  "test_video.mp4". These  are the very begining frames of this v
 Even though the beginning output of labels is not perfect, it doesn't matter. after several frames, because I'm using reference counter. when the reference counter is exceeding some water mark(5 frames now), it will show reasonable detectection.          
 ![alt text][image5_7]        
 
+I tried to add understandable comments in my code.    
 
 ### Discussion
 
@@ -127,6 +128,12 @@ Even though the beginning output of labels is not perfect, it doesn't matter. af
 
 When I draw a rectangle, I only considered previous and current frame. If many frames used and getting average of them, the rectangle will be more robust.   
 
- I've been thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line all of a sudden. It can reduce false positive.
+ I've been thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line all of a sudden. It can reduce false positive.           
+
+I think I spent so much time for this project before thinking of using specific data structure for tracking cars.   
+However, I don't think I wasted time. Because I could learn a lot thanks to this project!
+In The matrix(1999),  Morpheus said,"There is a difference between knowing the path and walking the path".   
+Morpheus was wrong! I would say, "There is a "huge" difference between knowing the path and walking the path".   
+
 
 
