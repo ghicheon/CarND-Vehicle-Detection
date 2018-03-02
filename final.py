@@ -4,7 +4,7 @@
 # Project 5: Vehicle Detection and Tracking
 # by Ghicheon Lee 
 #
-# date: 2018.2.26
+# date: 2018.3.2
 #######################################################################
 
 #I referenced a lot of codes and hints from "Vehicle Detection" Lecture!
