@@ -41,7 +41,7 @@ You're reading it!
 ### Histogram of Oriented Gradients (HOG)
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
-It can be found in lines 153 through 171 of the files called 'final.py'    
+It can be found in lines 234 through 268 of the files called 'final.py'    
 I extracted HOG features by calling skimage.feature.hog function. 
 I used 9 for orient ,8 for pixel per cell ,2 cell per block and "ALL" hog channels. I tried several color space and found out YCrCb gave me the best result.    
 
@@ -67,12 +67,12 @@ Actually,at first It does NOT work AT ALL.. It was because of reading png files.
 I got around 99% test accuracy. 
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
+It can be found from line 296 to 345 in "final.py"       
 I used vehicles.zip and non-vehicles.zip files for training SVM. The number of vehicles and non vehicles are 8792 and 8968 respectively.    
 First, I divided extracted features data into 2 parts. 80% of data is for traing. 20% of data is for testing.    
 Second, I extracted features from these image files. The function extract_features() did all for it. I only used hog features. well.. I could improve test accuracy a little bit with spatial feature and histogram feature. Howevery, I encounterd lots of false predictions in video. I think it's suffering from overfitting. I got a better result without those features.       
 Third,I nomalized the data using StandardScaler() in order to make all features influence to the result evenly.   
 I took advantage of pickle of python to save time.If I set PICKEL_READY to True,training is skipped.    
-The code can be found in car_detect_init() function of the file called final.py
 
 ### Sliding Window Search
 
@@ -82,7 +82,7 @@ I spent some time to finding good value for scale. I found out default value 1.5
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 Original sliding window took lots of time for training.I didn't get hog features for every window. Instead, I got hog feature 1 time per frame and used small part(window size) of it. As you may be expected, this code is based on find_car() of the lecture. I made it work in open cv by deleting dividing by 255(Wow... I spent too much time to find this defect!). 
-Upper part of car_detect() is for it.
+Upper part of car_detection() is for it.
 
   Here are some example images:
 
@@ -108,7 +108,9 @@ I ignored the detected object when the width is less than 30 pixel. it's too nar
 I also considered the ratio of width and height. For example, if the width is 100 and the height is 160, it's not a car. 
 
 
-### Here are six frames and their corresponding heatmaps:
+### continuous 5 frames and there heatmaps:
+I got this from  "test_video.mp4". These  are the very begining frames of this video.
+
 ![alt text][image5_1]         
 ![alt text][image5_2]       
 ![alt text][image5_3]      
