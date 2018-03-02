@@ -87,9 +87,13 @@ class Car(object):
 
     def update(self,a,b):
         self.init_core(a, b, self.ref + 2)
-        if (self.turn_on == False) and (self.ref > 10):
-            self.ref  += 10  #permanant!!!!!!?? 
-            self.turn_on = True
+        #I thought that...
+        #consistant showing objects has more probabilities to be shown in the following frames
+        #therefore,some more incentives might be helpful..
+        #well.... in reality, it was not helpful...
+        #if (self.turn_on == False) and (self.ref > 10):
+        #    self.ref  += 10  #give some incentives
+        #    self.turn_on = True
 
     def init_core(self,a,b,ref):
         self.a = a
@@ -122,9 +126,9 @@ class Car(object):
     def dec_ref(self):
         self.ref -= 1
 
-    # the number of valid object must be having 5 refrences  at least.
+    # the number of valid object must be having 10 refrences  at least.
     def valid(self):
-        return (self.ref >= 5   ) 
+        return (self.ref >= 10   ) 
 
 ############################################
 # reference:  image size (720,1280)
@@ -513,7 +517,7 @@ def car_detection(img):
             found_box_tuple=(None,None)
             for c in cars:
                 if found_box_tuple == (None,None): #not found yet!
-                    if c.distance(bbox[0],bbox[1]) < 100 : # the car whthin 50 pixel was assumed the same car.
+                    if c.distance(bbox[0],bbox[1]) < 100 : # the car whthin 100 pixel was assumed the same car.
                         a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 ) #average of  previous car and current one.
                         b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
                         #cars.append(Car(a,b, c.ref+2))
@@ -522,7 +526,7 @@ def car_detection(img):
                         done=True  # found the car we're trying to tracking.
                         found_box_tuple = (a,b) 
                 else: #found!!! 
-                    #delete duplicated objects!!  whithin 30 pixel!
+                    #delete duplicated objects!!  whithin 100 pixel!
                     if c.distance(found_box_tuple[0],found_box_tuple[1]) < 100 :
                         cars.remove(c)
 
@@ -530,11 +534,11 @@ def car_detection(img):
             if done == False:
                 cars.append(Car(bbox[0],bbox[1], 2))
 
-        # all entries of cars decreased 1.
-        #it's resonable because 2 reference counts was added in update() of Class.
+        # all entries of the list "cars" will be decreasing 1.
+        #it's resonable because 2 reference counts was added in update() of Car class.
         for c in cars:
             c.dec_ref()
-            if c.ref == 0:
+            if c.ref == 0:  #it's not referencing anymore.therefore, delete it.
                 cars.remove(c)
 
         remove_unrealistic_cars()
@@ -1043,11 +1047,6 @@ def main():
     result.write_videofile('project_video_output.mp4', audio=False)
     print("4. video pipeline - done")
 
-    need_windowing=True
-    clip = VideoFileClip("project_video.mp4")
-    car_detection_init_for_video()
-    result = clip.fl_image(process_frame) 
-    result.write_videofile('project_video_output_1.mp4', audio=False)
-    print("4. video pipeline - done")
+
 if __name__ == "__main__":
     main()
