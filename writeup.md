@@ -50,13 +50,13 @@ car example
 
 #### 2. Explain how you settled on your final choice of HOG parameters.
 I tried some combinations of hog parameters. Definitely,using 3 channels gave me much improvement. I got better result under the sun by setting transform_sqrt argument to True.     
-Actually,at first It does NOT work AT ALL.. It was because of reading png files. I had a hard time to use both mpimg() and imread() and gave up using them together. I only used cv2.imread() in order to read image files! After I apply this to every code including predicting, it started to be working magically!    
-I got over 99.5% test accuracy.(well.. I also used spatial features and histogram features. But,I'm sure that this accuracy mainly came from hog features!)
+Actually,at first It does NOT work AT ALL.. It was because of reading png files. I had a hard time to use both imread() of matplotlib and imread() of opencv. I gave up using them together. I only used cv2.imread() in order to read image files! After I apply this to every code including predicting, it started to be working magically!    
+I got around 99% test accuracy. 
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 I used vehicles.zip and non-vehicles.zip files for training SVM. The number of vehicles and non vehicles are 8792 and 8968 respectively.    
-First, I extracted features from these image files. The function extract_features() did all for it. I used hog features as well as color histogram features and spatial features.   
-Second, I divided extracted features data into 2 parts. 80% of data is for traing. 20% of data is for testing.    
+First, I divided extracted features data into 2 parts. 80% of data is for traing. 20% of data is for testing.    
+Second, I extracted features from these image files. The function extract_features() did all for it. I only used hog features. well.. I could improve test accuracy a little bit with spatial feature and histogram feature. Howevery, I encounterd lots of false predictions in video. I think it's suffering from overfitting. I got a better result without those features.       
 Third,I nomalized the data using StandardScaler() in order to make all features influence to the result evenly.   
 I took advantage of pickle of python to save time.If I set PICKEL_READY to True,training is skipped.    
 The code can be found in car_detect_init() function of the file called final.py
@@ -68,7 +68,7 @@ I got around 0.875 overlap windows by setting cells_per_step to 1. It gave me hu
 I spent some time to finding good value for scale. I found out default value 1.5 was not bad in my experience.  There might be better value. But,I didn't think it's worth finding it. I think it's better to put effort into making good tracking algorithm. Because of this, I decided to use 1.5 for scale.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-Original sliding window took lots of time for training.I didn't get hog features for every window.Instead, I got hog feature 1 time per frame and used small part(window size) of it. In fact, My code is based on find_car() of the lecture. I made it work in open cv by deleting dividing by 255(Wow... I spent too much time for it).    
+Original sliding window took lots of time for training.I didn't get hog features for every window. Instead, I got hog feature 1 time per frame and used small part(window size) of it. As you may be expected, this code is based on find_car() of the lecture. I made it work in open cv by deleting dividing by 255(Wow... I spent too much time to find this defect!). 
 Upper part of car_detect() is for it.
 
   Here are some example images:
@@ -112,12 +112,8 @@ I also considered the ratio of width and height. For example, if the width is 10
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-I only considered previous and current frame. If many frames for a car are used and getting average of them, the rectangle will be robust.   
+When I draw a rectangle, I only considered previous and current frame. If many frames used and getting average of them, the rectangle will be more robust.   
 
- I'm thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line. It can reduce false positive.
+ I've been thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line all of a sudden. It can reduce false positive.
 
-
-
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
 
