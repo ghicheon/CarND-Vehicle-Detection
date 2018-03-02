@@ -103,7 +103,7 @@ I spent so much time on getting a good result only with these tools.But It was n
 I created Car class. It represents one car. 'ref' member is for maintaining the reference count.If a car is detected several times, it's worth showing it.    
 'ref' is also used to show persistant box. When ref is more than 10,this one must be a car definitely.I added 10 more reference in that case. It made it possible to show a car even if it's not detected for a while.
 
-Before I draw a rectangle,I check ref memger of Car object. If it's less than 5, I ignore it at the moment becuase it might be a false positive.
+Before I draw a rectangle,I check ref member of Car object. If it's less than 5, I ignore it at the moment becuase it might be a false positive.
 I ignored the detected object when the width is less than 30 pixel. it's too narrow to be a car.    
 I also considered the ratio of width and height. For example, if the width is 100 and the height is 160, it's not a car. 
 
