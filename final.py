@@ -13,7 +13,13 @@ import numpy as np
 import cv2
 import glob
 import time
+
+
 from sklearn.svm import LinearSVC
+
+
+from sklearn import svm,datasets
+
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from skimage.feature import hog
@@ -37,17 +43,19 @@ debug=False
 #debug=True
 
 ##################################################################
-color_space =  'YCrCb'# Can be RGB, HSV, LUV., HLS!, YUV, YCrCb
+color_space =   'YCrCb'   #'YUV'# Can be RGB, HSV, LUV., HLS!, YUV, YCrCb
 orient = 9  # HOG orientations
 pix_per_cell = 8 # HOG pixels per cell
 cell_per_block = 2 # HOG cells per block
 hog_channel = "ALL" #0 # Can be 0, 1, 2, or "ALL"
 
-spatial_size = (32, 32) # Spatial binning dimensions
-hist_size = 32    # Number of histogram bins
+spatial_size = (16, 16) # Spatial binning dimensions
+hist_size = 16    # Number of histogram bins
+
+Cparam=0.01
 
 spatial_feat = False  # Spatial features on or off
-hist_feat = False  # Histogram features on or off
+hist_feat = True  # Histogram features on or off
 
 hog_feat = True # HOG features on or off # it's a essential feature.turn on allways..
 y_start_stop = [400,656]
@@ -86,8 +94,8 @@ class Car(object):
         self.turn_on = False # only one
 
     def update(self,a,b):
-        #self.ref can't exceed 80.
-        if self.ref < 80 :
+        #self.ref can't exceed 50.
+        if self.ref < 50 :
             self.init_core(a, b, self.ref + 2)
         else:
             #in car_detection(), all entries will be decreasing 1,
@@ -327,12 +335,13 @@ def car_detection_init():
             'pixels per cell and', cell_per_block,'cells per block')
         print('Feature vector length:', len(X_train[0]))
 
-        # Use a linear SVC 
-        svc = LinearSVC()
+
+        svc = LinearSVC(C=Cparam)
         
-        # Check the training time for the SVC
         t=time.time()
+
         svc.fit(X_train, y_train)
+
         t2 = time.time()
         print(round(t2-t, 2), 'Seconds to train SVC...')
         # Check the score of the SVC
@@ -479,8 +488,8 @@ def car_detection(img):
             test_features = X_scaler.transform(np.hstack((features)).reshape(1, -1))
             #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
             test_prediction = svc.predict(test_features)
-
-            if test_prediction == 1:
+            conf = svc.decision_function(test_features)
+            if test_prediction == 1 and conf > 0.4:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
@@ -524,7 +533,7 @@ def car_detection(img):
             found_box_tuple=(None,None)
             for c in cars:
                 if found_box_tuple == (None,None): #not found yet!
-                    if c.distance(bbox[0],bbox[1]) < 100 : # the car whthin 100 pixel was assumed the same car.
+                    if c.distance(bbox[0],bbox[1]) < 150 : # the car whthin 100 pixel was assumed the same car.
                         a = ((x1 + c.x1)//2 , (y1 + c.y1)//2 ) #average of  previous car and current one.
                         b = ((x2 + c.x2)//2 , (y2 + c.y2)//2 )
                         #cars.append(Car(a,b, c.ref+2))
@@ -534,7 +543,7 @@ def car_detection(img):
                         found_box_tuple = (a,b) 
                 else: #found!!! 
                     #delete duplicated objects!!  whithin 100 pixel!
-                    if c.distance(found_box_tuple[0],found_box_tuple[1]) < 100 :
+                    if c.distance(found_box_tuple[0],found_box_tuple[1]) < 150 :
                         cars.remove(c)
 
             #new one

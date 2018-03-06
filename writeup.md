@@ -70,7 +70,7 @@ I got around 99% test accuracy.
 It can be found from line 296 to 345 in "final.py"       
 I used vehicles.zip and non-vehicles.zip files for training SVM. The number of vehicles and non vehicles are 8792 and 8968 respectively.    
 First, I divided extracted features data into 2 parts. 80% of data is for traing. 20% of data is for testing.    
-Second, I extracted features from these image files. The function extract_features() did all for it. I only used hog features. well.. I could improve test accuracy a little bit with spatial feature and histogram feature. Howevery, I encounterd lots of false predictions in video. I think it's suffering from overfitting. I got a better result without those features.       
+Second, I extracted features from these image files. The function extract_features() did all for it. I used hog features and histogram feature. well.. I could improve test accuracy a little bit with spatial feature. Howevery, I encounterd lots of false predictions in video. I think it's suffering from overfitting. I got a better result without spatial features.       
 Third,I nomalized the data using StandardScaler() in order to make all features influence to the result evenly.   
 I took advantage of pickle of python to save time.If I set PICKEL_READY to True,training is skipped.    
 
@@ -101,11 +101,12 @@ Whenever my classifier says positive detection, I added the rectangle to box_lis
 I spent so much time on getting a good result only with these tools.But It was not possible!! Finally, I realized that I have to make a code for tracking cars by using specific data structure!!   
 
 I created Car class. It represents one car. 'ref' member is for maintaining the reference count.If a car is detected several times, it's worth showing it.    
-'ref' is also used to show persistant box. When ref is more than 10,this one must be a car definitely.I added 10 more reference in that case. It made it possible to show a car even if it's not detected for a while.
 
 Before I draw a rectangle,I check ref member of Car object. If it's less than 5, I ignore it at the moment becuase it might be a false positive.
 I ignored the detected object when the width is less than 30 pixel. it's too narrow to be a car.    
 I also considered the ratio of width and height. For example, if the width is 100 and the height is 160, it's not a car. 
+I could eliminate false positive with tunning  C parameter of SVC! I set 0.01 to C parameter.
+I also used decision_function() to get a better result.
 
 
 ### continuous 5 frames and there heatmaps:
@@ -120,7 +121,16 @@ I got this from  "test_video.mp4". These  are the very begining frames of this v
 Even though the beginning output of labels is not perfect, it doesn't matter. after several frames, because I'm using reference counter. when the reference counter is exceeding some water mark(5 frames now), it will show reasonable detectection.          
 ![alt text][image5_7]        
 
-I tried to add understandable comments in my code.    
+My approach is a little bit differant from others.(or I guess..)
+You can find line 492 to 569  of final.py        
+cars list(global linked list) have Car class as a member.    
+I used add_heat(), apply_threshhold() and label() for every frame.
+I compared the found rectangles from label() to entries of cars list. If they are close( within 150 pixel), I assumed I found the same car.  I got the average position of previous position and current one. I also updated reference count.   
+If I can't find the car , I added it to cars list as a new car.  
+when I draw, cars that have more than 5 reference count. It gets rid of some false positive.
+I tried to add understandable comments in my code.       
+
+
 
 ### Discussion
 
@@ -130,10 +140,6 @@ When I draw a rectangle, I only considered previous and current frame. If many f
 
  I've been thinking of (after some frames..) adding a new car only from specitic area such as bottom line and upper line. A car can't appear in the middle of road without crossing upper and bottom line all of a sudden. It can reduce false positive.           
 
-I think I spent so much time for this project before thinking of using specific data structure for tracking cars.   
-However, I don't think I wasted time. Because I could learn a lot thanks to this project!
-In The matrix(1999),  Morpheus said,"There is a difference between knowing the path and walking the path".   
-Morpheus was wrong! I would say, "There is a "huge" difference between knowing the path and walking the path".   
 
 
 
